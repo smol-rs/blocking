@@ -225,22 +225,25 @@ impl Executor {
         // already, then be aggressive: wake all idle threads and spawn one more thread.
         while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < EXECUTOR.thread_limit
         {
+            // Generate a new thread ID.
+            static ID: AtomicUsize = AtomicUsize::new(1);
+            let id = ID.fetch_add(1, Ordering::Relaxed);
+
+            // Spawn the new thread.
+            if let Err(e) = thread::Builder::new()
+                .name(format!("blocking-{}", id))
+                .spawn(move || self.main_loop())
+            {
+                log::error!("Failed to spawn new blocking thread: {:?}", e);
+                break;
+            }
+
             // The new thread starts in idle state.
             inner.idle_count += 1;
             inner.thread_count += 1;
 
             // Notify all existing idle threads because we need to hurry up.
             self.cvar.notify_all();
-
-            // Generate a new thread ID.
-            static ID: AtomicUsize = AtomicUsize::new(1);
-            let id = ID.fetch_add(1, Ordering::Relaxed);
-
-            // Spawn the new thread.
-            thread::Builder::new()
-                .name(format!("blocking-{}", id))
-                .spawn(move || self.main_loop())
-                .unwrap();
         }
     }
 }

@@ -223,8 +223,7 @@ impl Executor {
     fn grow_pool(&'static self, mut inner: MutexGuard<'static, Inner>) {
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.
-        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < inner.thread_limit
-        {
+        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < inner.thread_limit {
             // The new thread starts in idle state.
             inner.idle_count += 1;
             inner.thread_count += 1;

@@ -119,9 +119,9 @@ static EXECUTOR: Lazy<Executor> = Lazy::new(|| Executor {
         idle_count: 0,
         thread_count: 0,
         queue: VecDeque::new(),
+        thread_limit: Executor::max_threads(),
     }),
     cvar: Condvar::new(),
-    thread_limit: Executor::max_threads(),
 });
 
 /// The blocking executor.
@@ -131,9 +131,6 @@ struct Executor {
 
     /// Used to put idle threads to sleep and wake them up when new work comes in.
     cvar: Condvar,
-
-    /// Maximum number of threads in the pool
-    thread_limit: usize,
 }
 
 /// Inner state of the blocking executor.
@@ -147,6 +144,9 @@ struct Inner {
     ///
     /// This is the number of idle threads + the number of active threads.
     thread_count: usize,
+
+    /// Maximum number of threads in the pool
+    thread_limit: usize,
 
     /// The queue of blocking tasks.
     queue: VecDeque<Runnable>,
@@ -223,8 +223,12 @@ impl Executor {
     fn grow_pool(&'static self, mut inner: MutexGuard<'static, Inner>) {
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.
-        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < EXECUTOR.thread_limit
+        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < inner.thread_limit
         {
+            // The new thread starts in idle state.
+            inner.idle_count += 1;
+            inner.thread_count += 1;
+
             // Generate a new thread ID.
             static ID: AtomicUsize = AtomicUsize::new(1);
             let id = ID.fetch_add(1, Ordering::Relaxed);
@@ -235,12 +239,9 @@ impl Executor {
                 .spawn(move || self.main_loop())
             {
                 log::error!("Failed to spawn new blocking thread: {:?}", e);
+                inner.thread_limit = inner.thread_count;
                 break;
             }
-
-            // The new thread starts in idle state.
-            inner.idle_count += 1;
-            inner.thread_count += 1;
 
             // Notify all existing idle threads because we need to hurry up.
             self.cvar.notify_all();

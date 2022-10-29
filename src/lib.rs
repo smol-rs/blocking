@@ -93,10 +93,10 @@ use std::thread;
 use std::time::Duration;
 
 use async_channel::{bounded, Receiver};
+use async_lock::OnceCell;
 use async_task::Runnable;
 use atomic_waker::AtomicWaker;
 use futures_lite::{future, prelude::*, ready};
-use once_cell::sync::Lazy;
 
 #[doc(no_inline)]
 pub use async_task::Task;
@@ -112,17 +112,6 @@ const MAX_MAX_THREADS: usize = 10000;
 
 /// Env variable that allows to override default value for max threads.
 const MAX_THREADS_ENV: &str = "BLOCKING_MAX_THREADS";
-
-/// Lazily initialized global executor.
-static EXECUTOR: Lazy<Executor> = Lazy::new(|| Executor {
-    inner: Mutex::new(Inner {
-        idle_count: 0,
-        thread_count: 0,
-        queue: VecDeque::new(),
-        thread_limit: Executor::max_threads(),
-    }),
-    cvar: Condvar::new(),
-});
 
 /// The blocking executor.
 struct Executor {
@@ -162,11 +151,27 @@ impl Executor {
             Err(_) => DEFAULT_MAX_THREADS,
         }
     }
+
+    /// Get the global blocking task executor.
+    fn get() -> &'static Executor {
+        static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+
+        EXECUTOR.get_or_init_blocking(|| Executor {
+            inner: Mutex::new(Inner {
+                idle_count: 0,
+                thread_count: 0,
+                queue: VecDeque::new(),
+                thread_limit: Executor::max_threads(),
+            }),
+            cvar: Condvar::new(),
+        })
+    }
+
     /// Spawns a future onto this executor.
     ///
     /// Returns a [`Task`] handle for the spawned task.
     fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
-        let (runnable, task) = async_task::spawn(future, |r| EXECUTOR.schedule(r));
+        let (runnable, task) = async_task::spawn(future, |r| Executor::get().schedule(r));
         runnable.schedule();
         task
     }

@@ -83,6 +83,7 @@ use std::env;
 use std::fmt;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::mem;
+use std::num::NonZeroUsize;
 use std::panic;
 use std::pin::Pin;
 use std::slice;
@@ -138,7 +139,7 @@ struct Inner {
     queue: VecDeque<Runnable>,
 
     /// Maximum number of threads in the pool
-    thread_limit: usize,
+    thread_limit: NonZeroUsize,
 }
 
 impl Executor {
@@ -167,7 +168,7 @@ impl Executor {
                         idle_count: 0,
                         thread_count: 0,
                         queue: VecDeque::new(),
-                        thread_limit,
+                        thread_limit: NonZeroUsize::new(thread_limit).unwrap(),
                     }),
                     cvar: Condvar::new(),
                 }
@@ -232,7 +233,9 @@ impl Executor {
     fn grow_pool(&'static self, mut inner: MutexGuard<'static, Inner>) {
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.
-        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < inner.thread_limit {
+        while inner.queue.len() > inner.idle_count * 5
+            && inner.thread_count < inner.thread_limit.get()
+        {
             // The new thread starts in idle state.
             inner.idle_count += 1;
             inner.thread_count += 1;
@@ -256,7 +259,13 @@ impl Executor {
 
                 // The current number of threads is likely to be the system's upper limit, so update
                 // thread_limit accordingly.
-                inner.thread_limit = inner.thread_count;
+                inner.thread_limit = {
+                    let new_limit = inner.thread_count;
+
+                    // If the limit is about to be set to zero, set it to one instead so that if,
+                    // in the future, we are able to spawn more threads, we will be able to do so.
+                    NonZeroUsize::new(new_limit).unwrap_or_else(|| NonZeroUsize::new(1).unwrap())
+                };
             }
         }
     }

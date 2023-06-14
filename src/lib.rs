@@ -210,10 +210,7 @@ impl Executor {
 
             // Put the thread to sleep until another task is scheduled.
             let timeout = Duration::from_millis(500);
-            tracing::trace!(
-                timeout=?timeout,
-                "going to sleep"
-            );
+            tracing::trace!(?timeout, "going to sleep");
             let (lock, res) = self.cvar.wait_timeout(inner, timeout).unwrap();
             inner = lock;
 

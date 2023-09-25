@@ -1,3 +1,11 @@
+# Version 1.4.0
+
+- Bump MSRV to 1.59. (#44)
+- Remove the unused `memchr` dependency. (#38)
+- Extract read/write pipes into the `piper` crate, which this crate now uses. (#37)
+- Mark as `forbid(unsafe_code)` (#37).
+- Set up logging using `tracing`. (#40)
+
 # Version 1.3.1
 
 - Gracefully handle the inability to spawn threads. (#31)

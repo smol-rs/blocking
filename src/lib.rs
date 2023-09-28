@@ -245,7 +245,7 @@ impl Executor {
 
     /// Spawns more blocking threads if the pool is overloaded with work.
     fn grow_pool(&'static self, mut inner: MutexGuard<'static, Inner>) {
-        let span = tracing::error_span!(
+        let span = tracing::trace_span!(
             "grow_pool",
             queue_len = inner.queue.len(),
             idle_count = inner.idle_count,

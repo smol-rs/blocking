@@ -15,7 +15,7 @@ categories = ["asynchronous", "concurrency"]
 exclude = ["/.*"]
 
 [dependencies]
-async-channel = "1.4.0"
+async-channel = "2.0.0"
 async-lock = "3.0.0"
 async-task = "4.0.2"
 fastrand = "2.0.0"

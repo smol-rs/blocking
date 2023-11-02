@@ -668,7 +668,7 @@ enum State<T> {
 
     /// The inner value is an [`Iterator`] currently iterating in a task.
     ///
-    /// The `dyn Any` value here is a `mpsc::Receiver<<T as Iterator>::Item>`.
+    /// The `dyn Any` value here is a `Pin<Box<Receiver<<T as Iterator>::Item>>>`.
     Streaming(Option<Box<dyn Any + Send + Sync>>, Task<Box<T>>),
 
     /// The inner value is a [`Read`] currently reading in a task.
@@ -721,15 +721,15 @@ where
                     });
 
                     // Move into the busy state and poll again.
-                    self.state = State::Streaming(Some(Box::new(receiver)), task);
+                    self.state = State::Streaming(Some(Box::new(Box::pin(receiver))), task);
                 }
 
                 // If streaming, receive an item.
                 State::Streaming(Some(any), task) => {
-                    let receiver = any.downcast_mut::<Receiver<T::Item>>().unwrap();
+                    let receiver = any.downcast_mut::<Pin<Box<Receiver<T::Item>>>>().unwrap();
 
                     // Poll the channel.
-                    let opt = ready!(Pin::new(receiver).poll_next(cx));
+                    let opt = ready!(receiver.as_mut().poll_next(cx));
 
                     // If the channel is closed, retrieve the iterator back from the blocking task.
                     // This is not really a required step, but it's cleaner to drop the iterator on

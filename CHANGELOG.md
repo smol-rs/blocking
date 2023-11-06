@@ -1,3 +1,7 @@
+# Version 1.5.0
+
+- Bump MSRV to 1.61. (#50)
+
 # Version 1.4.1
 
 - Change the `error_span` in `grow_pool` into `trace_span`. (#45)

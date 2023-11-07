@@ -84,6 +84,11 @@
     html_logo_url = "https://raw.githubusercontent.com/smol-rs/smol/master/assets/images/logo_fullsize_transparent.png"
 )]
 
+#[cfg(target_family = "wasm")]
+compile_error! {
+    "`blocking` does not support WebAssembly targets"
+}
+
 use std::any::Any;
 use std::collections::VecDeque;
 use std::env;

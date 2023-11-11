@@ -16,13 +16,15 @@ exclude = ["/.*"]
 
 [dependencies]
 async-channel = "2.0.0"
-async-lock = "3.0.0"
 async-task = "4.0.2"
 fastrand = "2.0.0"
 futures-io = { version = "0.3.28", default-features = false, features = ["std"] }
 futures-lite = { version = "2.0.0", default-features = false }
 piper = "0.2.0"
 tracing = { version = "0.1.37", default-features = false }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+async-lock = "3.0.0"
 
 [dev-dependencies]
 futures-lite = "2.0.0"

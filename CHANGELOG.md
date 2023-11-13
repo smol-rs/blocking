@@ -1,3 +1,7 @@
+# Version 1.5.1
+
+- Fix compilation on WebAssembly targets (#54).
+
 # Version 1.5.0
 
 - Bump MSRV to 1.61. (#50)

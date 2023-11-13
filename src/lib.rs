@@ -86,7 +86,6 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::env;
 use std::fmt;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
@@ -98,8 +97,10 @@ use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(not(target_family = "wasm"))]
+use std::env;
+
 use async_channel::{bounded, Receiver};
-use async_lock::OnceCell;
 use async_task::Runnable;
 use futures_io::{AsyncRead, AsyncSeek, AsyncWrite};
 use futures_lite::{future, prelude::*, ready};
@@ -109,15 +110,19 @@ use piper::{pipe, Reader, Writer};
 pub use async_task::Task;
 
 /// Default value for max threads that Executor can grow to
+#[cfg(not(target_family = "wasm"))]
 const DEFAULT_MAX_THREADS: usize = 500;
 
 /// Minimum value for max threads config
+#[cfg(not(target_family = "wasm"))]
 const MIN_MAX_THREADS: usize = 1;
 
 /// Maximum value for max threads config
+#[cfg(not(target_family = "wasm"))]
 const MAX_MAX_THREADS: usize = 10000;
 
 /// Env variable that allows to override default value for max threads.
+#[cfg(not(target_family = "wasm"))]
 const MAX_THREADS_ENV: &str = "BLOCKING_MAX_THREADS";
 
 /// The blocking executor.
@@ -149,6 +154,7 @@ struct Inner {
 }
 
 impl Executor {
+    #[cfg(not(target_family = "wasm"))]
     fn max_threads() -> usize {
         match env::var(MAX_THREADS_ENV) {
             Ok(v) => v
@@ -159,15 +165,16 @@ impl Executor {
         }
     }
 
-    /// Spawns a future onto this executor.
-    ///
-    /// Returns a [`Task`] handle for the spawned task.
-    fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
-        static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+    /// Get a reference to the global executor.
+    #[inline]
+    fn get() -> &'static Self {
+        #[cfg(not(target_family = "wasm"))]
+        {
+            use async_lock::OnceCell;
 
-        let (runnable, task) = async_task::spawn(future, |r| {
-            // Initialize the executor if we haven't already.
-            let executor = EXECUTOR.get_or_init_blocking(|| {
+            static EXECUTOR: OnceCell<Executor> = OnceCell::new();
+
+            return EXECUTOR.get_or_init_blocking(|| {
                 let thread_limit = Self::max_threads();
                 Executor {
                     inner: Mutex::new(Inner {
@@ -179,6 +186,19 @@ impl Executor {
                     cvar: Condvar::new(),
                 }
             });
+        }
+
+        #[cfg(target_family = "wasm")]
+        panic!("cannot spawn a blocking task on WASM")
+    }
+
+    /// Spawns a future onto this executor.
+    ///
+    /// Returns a [`Task`] handle for the spawned task.
+    fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
+        let (runnable, task) = async_task::spawn(future, |r| {
+            // Initialize the executor if we haven't already.
+            let executor = Self::get();
 
             // Schedule the task on our executor.
             executor.schedule(r)
@@ -943,9 +963,10 @@ impl<T: Seek + Send + 'static> AsyncSeek for Unblock<T> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use super::*;
+
     #[test]
     fn test_max_threads() {
         // properly set env var

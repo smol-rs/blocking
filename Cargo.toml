@@ -5,7 +5,7 @@ name = "blocking"
 # - Create "v1.x.y" git tag
 version = "1.5.1"
 authors = ["Stjepan Glavina <stjepang@gmail.com>"]
-edition = "2018"
+edition = "2021"
 rust-version = "1.60"
 description = "A thread pool for isolating blocking I/O in async programs"
 license = "Apache-2.0 OR MIT"

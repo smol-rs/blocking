@@ -103,7 +103,11 @@ use std::env;
 use async_channel::{bounded, Receiver};
 use async_task::Runnable;
 use futures_io::{AsyncRead, AsyncSeek, AsyncWrite};
-use futures_lite::{future, prelude::*, ready};
+use futures_lite::{
+    future::{self, Future},
+    ready,
+    stream::Stream,
+};
 use piper::{pipe, Reader, Writer};
 
 #[doc(no_inline)]

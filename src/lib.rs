@@ -163,7 +163,7 @@ impl Executor {
         match env::var(MAX_THREADS_ENV) {
             Ok(v) => v
                 .parse::<usize>()
-                .map(|v| v.max(MIN_MAX_THREADS).min(MAX_MAX_THREADS))
+                .map(|v| v.clamp(MIN_MAX_THREADS, MAX_MAX_THREADS))
                 .unwrap_or(DEFAULT_MAX_THREADS),
             Err(_) => DEFAULT_MAX_THREADS,
         }
@@ -200,13 +200,16 @@ impl Executor {
     ///
     /// Returns a [`Task`] handle for the spawned task.
     fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> Task<T> {
-        let (runnable, task) = async_task::spawn(future, |r| {
-            // Initialize the executor if we haven't already.
-            let executor = Self::get();
+        let (runnable, task) = async_task::Builder::new().propagate_panic(true).spawn(
+            move |()| future,
+            |r| {
+                // Initialize the executor if we haven't already.
+                let executor = Self::get();
 
-            // Schedule the task on our executor.
-            executor.schedule(r)
-        });
+                // Schedule the task on our executor.
+                executor.schedule(r)
+            },
+        );
         runnable.schedule();
         task
     }

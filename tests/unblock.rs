@@ -1,6 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use std::io::{Cursor, SeekFrom};
+use std::panic::AssertUnwindSafe;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -100,4 +101,40 @@ fn seek() {
         v.read(&mut byte).await.unwrap();
         assert_eq!(byte[0], 15);
     })
+}
+
+#[test]
+fn panic() {
+    future::block_on(async {
+        let x = unblock(|| panic!("expected failure"));
+        let panic = x.catch_unwind().await.unwrap_err();
+
+        // Make sure it's our panic and not an unrelated one.
+        let msg = if let Some(msg) = panic.downcast_ref::<&'static str>() {
+            msg.to_string()
+        } else {
+            *panic.downcast::<String>().unwrap()
+        };
+        assert_eq!(msg, "expected failure");
+    });
+}
+
+#[test]
+fn panic_with_mut() {
+    future::block_on(async {
+        let mut io = Unblock::new(());
+        let x = io.with_mut(|()| panic!("expected failure"));
+        let panic = AssertUnwindSafe(x).catch_unwind().await.unwrap_err();
+
+        // Make sure it's our panic and not an unrelated one.
+        let msg = if let Some(msg) = panic.downcast_ref::<&'static str>() {
+            msg.to_string()
+        } else {
+            *panic.downcast::<String>().unwrap()
+        };
+        assert_eq!(
+            msg,
+            "`Unblock::with_mut()` operation has panicked: RecvError"
+        );
+    });
 }

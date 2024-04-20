@@ -132,6 +132,9 @@ fn panic_with_mut() {
         } else {
             *panic.downcast::<String>().unwrap()
         };
-        assert_eq!(msg, "`Unblock::with_mut()` operation has panicked: RecvError");
+        assert_eq!(
+            msg,
+            "`Unblock::with_mut()` operation has panicked: RecvError"
+        );
     });
 }

@@ -169,6 +169,11 @@ impl Executor {
         }
     }
 
+    #[cfg(target_family = "wasm")]
+    fn max_threads() -> usize {
+        DEFAULT_MAX_THREADS
+    }
+
     /// Get a reference to the global executor.
     #[inline]
     fn get() -> &'static Self {
@@ -184,7 +189,7 @@ impl Executor {
                 cvar: Condvar::new(),
             };
 
-            return &EXECUTOR;
+            &EXECUTOR
         }
 
         #[cfg(target_family = "wasm")]

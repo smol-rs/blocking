@@ -115,7 +115,13 @@ pub use async_task::Task;
 
 /// Default value for max threads that Executor can grow to
 #[cfg(not(target_family = "wasm"))]
-const DEFAULT_MAX_THREADS: usize = 500;
+const DEFAULT_MAX_THREADS: NonZeroUsize = {
+    if let Some(size) = NonZeroUsize::new(500) {
+        size
+    } else {
+        panic!("DEFAULT_MAX_THREADS is non-zero");
+    }
+};
 
 /// Minimum value for max threads config
 #[cfg(not(target_family = "wasm"))]
@@ -159,19 +165,20 @@ struct Inner {
 
 impl Executor {
     #[cfg(not(target_family = "wasm"))]
-    fn max_threads() -> usize {
+    fn max_threads() -> NonZeroUsize {
         match env::var(MAX_THREADS_ENV) {
             Ok(v) => v
                 .parse::<usize>()
-                .map(|v| v.clamp(MIN_MAX_THREADS, MAX_MAX_THREADS))
+                .ok()
+                .and_then(|v| NonZeroUsize::new(v.clamp(MIN_MAX_THREADS, MAX_MAX_THREADS)))
                 .unwrap_or(DEFAULT_MAX_THREADS),
             Err(_) => DEFAULT_MAX_THREADS,
         }
     }
 
     #[cfg(target_family = "wasm")]
-    fn max_threads() -> usize {
-        1
+    fn max_threads() -> NonZeroUsize {
+        NonZeroUsize::new(1).unwrap()
     }
 
     /// Get a reference to the global executor.
@@ -282,7 +289,7 @@ impl Executor {
 
         let thread_limit = inner
             .thread_limit
-            .get_or_insert_with(|| NonZeroUsize::new(Self::max_threads()).unwrap())
+            .get_or_insert_with(|| Self::max_threads())
             .get();
 
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads

@@ -304,14 +304,13 @@ impl Executor {
             let id = ID.fetch_add(1, Ordering::Relaxed);
 
             // Spawn the new thread.
-            #[allow(unused_variables)]
-            if let Err(e) = thread::Builder::new()
+            if let Err(_e) = thread::Builder::new()
                 .name(format!("blocking-{}", id))
                 .spawn(move || self.main_loop())
             {
                 // We were unable to spawn the thread, so we need to undo the state changes.
                 #[cfg(feature = "tracing")]
-                tracing::error!("failed to spawn a blocking thread: {}", e);
+                tracing::error!("failed to spawn a blocking thread: {}", _e);
                 inner.idle_count -= 1;
                 inner.thread_count -= 1;
 

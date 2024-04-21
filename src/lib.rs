@@ -988,22 +988,22 @@ mod tests {
     fn test_max_threads() {
         // properly set env var
         env::set_var(MAX_THREADS_ENV, "100");
-        assert_eq!(100, Executor::max_threads());
+        assert_eq!(100, Executor::max_threads().get());
 
         // passed value below minimum, so we set it to minimum
         env::set_var(MAX_THREADS_ENV, "0");
-        assert_eq!(1, Executor::max_threads());
+        assert_eq!(1, Executor::max_threads().get());
 
         // passed value above maximum, so we set to allowed maximum
         env::set_var(MAX_THREADS_ENV, "50000");
-        assert_eq!(10000, Executor::max_threads());
+        assert_eq!(10000, Executor::max_threads().get());
 
         // no env var, use default
         env::set_var(MAX_THREADS_ENV, "");
-        assert_eq!(500, Executor::max_threads());
+        assert_eq!(500, Executor::max_threads().get());
 
         // not a number, use default
         env::set_var(MAX_THREADS_ENV, "NOTINT");
-        assert_eq!(500, Executor::max_threads());
+        assert_eq!(500, Executor::max_threads().get());
     }
 }

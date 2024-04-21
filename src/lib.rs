@@ -154,7 +154,7 @@ struct Inner {
     queue: VecDeque<Runnable>,
 
     /// Maximum number of threads in the pool
-    thread_limit: NonZeroUsize,
+    thread_limit: Option<NonZeroUsize>,
 }
 
 impl Executor {
@@ -174,22 +174,17 @@ impl Executor {
     fn get() -> &'static Self {
         #[cfg(not(target_family = "wasm"))]
         {
-            use async_lock::OnceCell;
+            static EXECUTOR: Executor = Executor {
+                inner: Mutex::new(Inner {
+                    idle_count: 0,
+                    thread_count: 0,
+                    queue: VecDeque::new(),
+                    thread_limit: None,
+                }),
+                cvar: Condvar::new(),
+            };
 
-            static EXECUTOR: OnceCell<Executor> = OnceCell::new();
-
-            return EXECUTOR.get_or_init_blocking(|| {
-                let thread_limit = Self::max_threads();
-                Executor {
-                    inner: Mutex::new(Inner {
-                        idle_count: 0,
-                        thread_count: 0,
-                        queue: VecDeque::new(),
-                        thread_limit: NonZeroUsize::new(thread_limit).unwrap(),
-                    }),
-                    cvar: Condvar::new(),
-                }
-            });
+            return &EXECUTOR;
         }
 
         #[cfg(target_family = "wasm")]
@@ -280,11 +275,14 @@ impl Executor {
         );
         let _enter = span.enter();
 
+        let thread_limit = inner
+            .thread_limit
+            .get_or_insert_with(|| NonZeroUsize::new(Self::max_threads()).unwrap())
+            .get();
+
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.
-        while inner.queue.len() > inner.idle_count * 5
-            && inner.thread_count < inner.thread_limit.get()
-        {
+        while inner.queue.len() > inner.idle_count * 5 && inner.thread_count < thread_limit {
             tracing::trace!("spawning a new thread to handle blocking tasks");
 
             // The new thread starts in idle state.
@@ -315,12 +313,12 @@ impl Executor {
 
                     // If the limit is about to be set to zero, set it to one instead so that if,
                     // in the future, we are able to spawn more threads, we will be able to do so.
-                    NonZeroUsize::new(new_limit).unwrap_or_else(|| {
+                    Some(NonZeroUsize::new(new_limit).unwrap_or_else(|| {
                         tracing::warn!(
                             "attempted to lower thread_limit to zero; setting to one instead"
                         );
                         NonZeroUsize::new(1).unwrap()
-                    })
+                    }))
                 };
             }
         }

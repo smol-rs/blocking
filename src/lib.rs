@@ -289,7 +289,7 @@ impl Executor {
 
         let thread_limit = inner
             .thread_limit
-            .get_or_insert_with(|| Self::max_threads())
+            .get_or_insert_with(Self::max_threads)
             .get();
 
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads

@@ -281,7 +281,8 @@ impl Executor {
             queue_len = inner.queue.len(),
             idle_count = inner.idle_count,
             thread_count = inner.thread_count,
-        ).entered();
+        )
+        .entered();
 
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.

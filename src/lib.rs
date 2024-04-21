@@ -171,7 +171,7 @@ impl Executor {
 
     #[cfg(target_family = "wasm")]
     fn max_threads() -> usize {
-        DEFAULT_MAX_THREADS
+        1
     }
 
     /// Get a reference to the global executor.

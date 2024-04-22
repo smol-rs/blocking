@@ -218,8 +218,8 @@ impl Executor {
     ///
     /// This function runs blocking tasks until it becomes idle and times out.
     fn main_loop(&'static self) {
-        let span = tracing::trace_span!("blocking::main_loop");
-        let _enter = span.enter();
+        #[cfg(feature = "tracing")]
+        let _span = tracing::trace_span!("blocking::main_loop").entered();
 
         let mut inner = self.inner.lock().unwrap();
         loop {
@@ -243,6 +243,7 @@ impl Executor {
 
             // Put the thread to sleep until another task is scheduled.
             let timeout = Duration::from_millis(500);
+            #[cfg(feature = "tracing")]
             tracing::trace!(?timeout, "going to sleep");
             let (lock, res) = self.cvar.wait_timeout(inner, timeout).unwrap();
             inner = lock;
@@ -254,9 +255,11 @@ impl Executor {
                 break;
             }
 
+            #[cfg(feature = "tracing")]
             tracing::trace!("notified");
         }
 
+        #[cfg(feature = "tracing")]
         tracing::trace!("shutting down due to lack of tasks");
     }
 
@@ -272,19 +275,21 @@ impl Executor {
 
     /// Spawns more blocking threads if the pool is overloaded with work.
     fn grow_pool(&'static self, mut inner: MutexGuard<'static, Inner>) {
-        let span = tracing::trace_span!(
+        #[cfg(feature = "tracing")]
+        let _span = tracing::trace_span!(
             "grow_pool",
             queue_len = inner.queue.len(),
             idle_count = inner.idle_count,
             thread_count = inner.thread_count,
-        );
-        let _enter = span.enter();
+        )
+        .entered();
 
         // If runnable tasks greatly outnumber idle threads and there aren't too many threads
         // already, then be aggressive: wake all idle threads and spawn one more thread.
         while inner.queue.len() > inner.idle_count * 5
             && inner.thread_count < inner.thread_limit.get()
         {
+            #[cfg(feature = "tracing")]
             tracing::trace!("spawning a new thread to handle blocking tasks");
 
             // The new thread starts in idle state.
@@ -299,12 +304,13 @@ impl Executor {
             let id = ID.fetch_add(1, Ordering::Relaxed);
 
             // Spawn the new thread.
-            if let Err(e) = thread::Builder::new()
+            if let Err(_e) = thread::Builder::new()
                 .name(format!("blocking-{}", id))
                 .spawn(move || self.main_loop())
             {
                 // We were unable to spawn the thread, so we need to undo the state changes.
-                tracing::error!("failed to spawn a blocking thread: {}", e);
+                #[cfg(feature = "tracing")]
+                tracing::error!("failed to spawn a blocking thread: {}", _e);
                 inner.idle_count -= 1;
                 inner.thread_count -= 1;
 
@@ -316,6 +322,7 @@ impl Executor {
                     // If the limit is about to be set to zero, set it to one instead so that if,
                     // in the future, we are able to spawn more threads, we will be able to do so.
                     NonZeroUsize::new(new_limit).unwrap_or_else(|| {
+                        #[cfg(feature = "tracing")]
                         tracing::warn!(
                             "attempted to lower thread_limit to zero; setting to one instead"
                         );

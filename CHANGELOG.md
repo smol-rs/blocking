@@ -1,3 +1,11 @@
+# Version 1.6.0
+
+- Panics that occur in `unblock`ed functions are now propagated to the calling
+  function. (#58)
+- Add a new optional `tracing` feature. When enabled, this feature adds logging
+  to the implementation. By default it is disabled. (#60)
+- Remove the unused `fastrand` dependency. (#61)
+
 # Version 1.5.1
 
 - Fix compilation on WebAssembly targets (#54).

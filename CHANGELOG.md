@@ -1,3 +1,7 @@
+# Version 1.6.1
+
+- Remove our dependency on the `async-lock` crate. (#59)
+
 # Version 1.6.0
 
 - Panics that occur in `unblock`ed functions are now propagated to the calling

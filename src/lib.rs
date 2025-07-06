@@ -324,7 +324,7 @@ impl Executor {
 
             // Spawn the new thread.
             if let Err(_e) = thread::Builder::new()
-                .name(format!("blocking-{}", id))
+                .name(format!("blocking-{id}"))
                 .spawn(move || self.main_loop())
             {
                 // We were unable to spawn the thread, so we need to undo the state changes.

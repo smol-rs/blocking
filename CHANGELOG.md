@@ -1,3 +1,7 @@
+# Version 1.6.2
+
+- Fix build failure with minimal-versions. (#71)
+
 # Version 1.6.1
 
 - Remove our dependency on the `async-lock` crate. (#59)

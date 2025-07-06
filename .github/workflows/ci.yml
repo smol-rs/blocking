@@ -48,6 +48,10 @@ jobs:
       - name: Install Rust
         run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
       - run: rustup target add wasm32-unknown-unknown
+      - name: Install cargo-hack and cargo-minimal-versions
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack,cargo-minimal-versions
       - run: cargo build --all --all-features --all-targets
       - name: Run cargo check (without dev-dependencies to catch missing feature flags)
         if: startsWith(matrix.rust, 'nightly')
@@ -55,6 +59,7 @@ jobs:
       - run: cargo test
       - name: Run cargo check for WASM
         run: cargo check --all --all-features --all-targets --target wasm32-unknown-unknown
+      - run: cargo minimal-versions build --all --all-features
 
   msrv:
     runs-on: ubuntu-latest

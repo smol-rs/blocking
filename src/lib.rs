@@ -13,7 +13,7 @@
 //! next job or shuts down after a certain timeout.
 //!
 //! The default number of threads (set to 500) can be altered by setting `BLOCKING_MAX_THREADS` environment
-//! variable with value between 1 and 10000. This can also be set, at runtime, via the 
+//! variable with value between 1 and 10000. This can also be set, at runtime, via the
 //! [`set_max_blocking_threads`] function.
 //!
 //! [IOCP]: https://en.wikipedia.org/wiki/Input/output_completion_port
@@ -139,7 +139,10 @@ const MAX_THREADS_ENV: &str = "BLOCKING_MAX_THREADS";
 /// Set the maximum number of threads used by the backing thread pool.
 pub fn set_max_blocking_threads(threads: NonZeroUsize) {
     let executor = Executor::get();
-    let mut inner = executor.inner.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut inner = executor
+        .inner
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
     let old_limit = inner.thread_limit;
     inner.thread_limit = Some(threads);
     if let Some(old_limit) = old_limit {

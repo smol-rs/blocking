@@ -137,17 +137,17 @@ const MAX_MAX_THREADS: usize = 10000;
 const MAX_THREADS_ENV: &str = "BLOCKING_MAX_THREADS";
 
 /// Set the maximum number of threads used by the backing thread pool.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```no_run
 /// use blocking::unblock;
 /// use std::fs::{read_dir, File};
 /// use std::io::prelude::*;
 /// # use std::num::NonZeroUsize;
-/// 
+///
 /// blocking::set_max_blocking_threads(NonZeroUsize::new(100).unwrap());
-/// 
+///
 /// # fn test() -> std::io::Result<()> {
 /// let mut files = Vec::new();
 /// for entry in read_dir("/path/to/large/directory").unwrap() {

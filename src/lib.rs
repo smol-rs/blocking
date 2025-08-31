@@ -12,8 +12,9 @@
 //! job has to finish before others get a chance to run. When a thread is idle, it waits for the
 //! next job or shuts down after a certain timeout.
 //!
-//! The default number of threads (set to 500) can be altered by setting BLOCKING_MAX_THREADS environment
-//! variable with value between 1 and 10000.
+//! The default number of threads (set to 500) can be altered by setting `BLOCKING_MAX_THREADS` environment
+//! variable with value between 1 and 10000. This can also be set, at runtime, via the
+//! [`set_max_blocking_threads`] function.
 //!
 //! [IOCP]: https://en.wikipedia.org/wiki/Input/output_completion_port
 //! [AIO]: http://man7.org/linux/man-pages/man2/io_submit.2.html
@@ -92,7 +93,7 @@ use std::num::NonZeroUsize;
 use std::panic;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::task::{Context, Poll};
 use std::thread;
 use std::time::Duration;
@@ -134,6 +135,48 @@ const MAX_MAX_THREADS: usize = 10000;
 /// Env variable that allows to override default value for max threads.
 #[cfg(not(target_family = "wasm"))]
 const MAX_THREADS_ENV: &str = "BLOCKING_MAX_THREADS";
+
+/// Set the maximum number of threads used by the backing thread pool.
+///
+/// # Example
+///
+/// ```no_run
+/// use blocking::unblock;
+/// use std::fs::{read_dir, File};
+/// use std::io::prelude::*;
+/// # use std::num::NonZeroUsize;
+///
+/// blocking::set_max_blocking_threads(NonZeroUsize::new(100).unwrap());
+///
+/// # fn test() -> std::io::Result<()> {
+/// let mut files = Vec::new();
+/// for entry in read_dir("/path/to/large/directory").unwrap() {
+///     files.push(unblock(move || -> std::io::Result<String> {
+///         let mut contents = String::new();
+///         let mut file = File::open(entry?.path())?;
+///         file.read_to_string(&mut contents)?;
+///         Ok(contents)
+///     }));
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub fn set_max_blocking_threads(threads: NonZeroUsize) {
+    let executor = Executor::get();
+    let mut inner = executor
+        .inner
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let old_limit = inner.thread_limit;
+    inner.thread_limit = Some(threads);
+    if let Some(old_limit) = old_limit {
+        // If the limit has decreased, wake up all threads to terminate those over
+        // the new limit.
+        if old_limit > threads {
+            executor.cvar.notify_all();
+        }
+    }
+}
 
 /// The blocking executor.
 struct Executor {
@@ -228,7 +271,7 @@ impl Executor {
         #[cfg(feature = "tracing")]
         let _span = tracing::trace_span!("blocking::main_loop").entered();
 
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         loop {
             // This thread is not idle anymore because it's going to run tasks.
             inner.idle_count -= 1;
@@ -242,7 +285,7 @@ impl Executor {
                 panic::catch_unwind(|| runnable.run()).ok();
 
                 // Re-lock the inner state and continue.
-                inner = self.inner.lock().unwrap();
+                inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
             }
 
             // This thread is now becoming idle.
@@ -255,8 +298,11 @@ impl Executor {
             let (lock, res) = self.cvar.wait_timeout(inner, timeout).unwrap();
             inner = lock;
 
-            // If there are no tasks after a while, stop this thread.
-            if res.timed_out() && inner.queue.is_empty() {
+            // If there are too many threads active in the pool, stop this thread.
+            if (Some(inner.thread_count) > inner.thread_limit.map(NonZeroUsize::get))
+                // If there are no tasks after a while, stop this thread.
+                && (res.timed_out() && inner.queue.is_empty())
+            {
                 inner.idle_count -= 1;
                 inner.thread_count -= 1;
                 break;
@@ -272,7 +318,7 @@ impl Executor {
 
     /// Schedules a runnable task for execution.
     fn schedule(&'static self, runnable: Runnable) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         inner.queue.push_back(runnable);
 
         // Notify a sleeping thread and spawn more threads if needed.

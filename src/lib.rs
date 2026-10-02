@@ -385,6 +385,7 @@ impl Executor {
                         NonZeroUsize::new(1).unwrap()
                     }))
                 };
+                break;
             }
         }
     }

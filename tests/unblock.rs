@@ -138,3 +138,70 @@ fn panic_with_mut() {
         );
     });
 }
+
+#[test]
+fn write_reports_background_error() {
+    struct BrokenWriter;
+
+    impl std::io::Write for BrokenWriter {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "background write failed",
+            ))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    future::block_on(async {
+        let mut writer = Unblock::with_capacity(1, BrokenWriter);
+        let error = writer.write_all(b"ab").await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(error.to_string(), "background write failed");
+    });
+}
+
+#[test]
+fn write_can_resume_after_background_error() {
+    struct RecoveringWriter {
+        fail: bool,
+        bytes: Vec<u8>,
+    }
+
+    impl std::io::Write for RecoveringWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if self.fail {
+                self.fail = false;
+                return Err(std::io::ErrorKind::PermissionDenied.into());
+            }
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    future::block_on(async {
+        let mut writer = Unblock::with_capacity(
+            1,
+            RecoveringWriter {
+                fail: true,
+                bytes: Vec::new(),
+            },
+        );
+        assert_eq!(writer.write(&[]).await.unwrap(), 0);
+        assert_eq!(
+            writer.write_all(b"ab").await.unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(writer.write(&[]).await.unwrap(), 0);
+        writer.write_all(b"xy").await.unwrap();
+        writer.flush().await.unwrap();
+        assert_eq!(writer.into_inner().await.bytes, b"xy");
+    });
+}

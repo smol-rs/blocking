@@ -1,3 +1,7 @@
+# Unreleased
+
+- Report background write errors from `Unblock::poll_write` instead of successful zero-byte writes.
+
 # Version 1.7.0
 
 - Bump MSRV to v1.68.

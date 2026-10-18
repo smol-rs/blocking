@@ -954,7 +954,16 @@ impl<T: Write + Send + 'static> AsyncWrite for Unblock<T> {
                 }
 
                 // If writing, write more bytes into the pipe.
-                State::Writing(Some(writer), _) => return writer.poll_fill(cx, buf),
+                State::Writing(Some(writer), _) => {
+                    let n = ready!(writer.poll_fill(cx, buf))?;
+                    if n != 0 || buf.is_empty() {
+                        return Poll::Ready(Ok(n));
+                    }
+
+                    // The pipe reader has closed. Wait for the task so that its
+                    // write error is reported instead of a successful zero write.
+                    ready!(self.poll_stop(cx))?;
+                }
             }
         }
     }

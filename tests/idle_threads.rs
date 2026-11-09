@@ -42,6 +42,11 @@ fn wait_for_count(expected: usize, timeout: Duration) -> usize {
     }
 }
 
+/// Counts pool threads through `/proc/self/task` by their OS thread name,
+/// which Miri's virtualized threads never carry — so this test cannot
+/// observe the pool under Miri (it would fail at the "thread spawned"
+/// assertion, having never seen a `blocking-*` thread at all).
+#[cfg_attr(miri, ignore)]
 #[test]
 fn idle_threads_exit_when_under_thread_limit() {
     // No pool threads before any work is submitted.

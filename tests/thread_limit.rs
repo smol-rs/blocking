@@ -43,6 +43,11 @@ fn wait_for_count_at_most(max: usize, timeout: Duration) -> usize {
     }
 }
 
+/// Counts pool threads through `/proc/self/task` by their OS thread name,
+/// which Miri's virtualized threads never carry — so this test cannot
+/// observe the pool under Miri (the count would stay 0 and the
+/// "pool did not grow" assertion would fail spuriously).
+#[cfg_attr(miri, ignore)]
 #[test]
 fn lowering_thread_limit_retires_excess_idle_threads() {
     // No pool threads before any work is submitted.

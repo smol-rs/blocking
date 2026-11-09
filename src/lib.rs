@@ -298,11 +298,17 @@ impl Executor {
             let (lock, res) = self.cvar.wait_timeout(inner, timeout).unwrap();
             inner = lock;
 
-            // If there are too many threads active in the pool, stop this thread.
-            if (Some(inner.thread_count) > inner.thread_limit.map(NonZeroUsize::get))
-                // If there are no tasks after a while, stop this thread.
-                && (res.timed_out() && inner.queue.is_empty())
-            {
+            // Stop this thread if there is no work queued and either:
+            // - it has been idle for a while (timed out), or
+            // - there are too many threads in the pool, e.g. because the
+            //   thread limit was lowered with `set_max_blocking_threads`.
+            // Note that a thread woken up by a new task must not exit while
+            // tasks are still queued, even if it is over the limit: it has
+            // to run them first, so the queue must be empty in both cases.
+            let over_limit = inner
+                .thread_limit
+                .map_or(false, |limit| inner.thread_count > limit.get());
+            if inner.queue.is_empty() && (res.timed_out() || over_limit) {
                 inner.idle_count -= 1;
                 inner.thread_count -= 1;
                 break;
